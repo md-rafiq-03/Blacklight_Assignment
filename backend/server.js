@@ -57,13 +57,21 @@ pool.getConnection((err, connection) => {
         
     });
     
-    app.get('/user-rank/:userId', (req, res) => {
+ app.get('/user-rank/:userId', (req, res) => {
         const userId = req.params.userId;
-        // Implement logic to fetch user rank given the userId
+        pool.query(`
+        select * from (
+            SELECT *,
+                   ROW_NUMBER() OVER (ORDER BY score DESC, timestamp) AS User_rank
+            FROM leaderboard) as new_table
+            where new_table.uid='${userId}'`,(err,data)=>{
+                    console.log(data);
+                    res.json(data);
+        })
     });
     
 
-    const PORT = process.env.PORT || 4000;
+    const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => {
         console.log(`Server is running on port ${PORT}`);
     });
