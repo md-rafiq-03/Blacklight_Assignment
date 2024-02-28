@@ -1,10 +1,12 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const dotenv= require("dotenv");
+dotenv.config({ path: "./config.env" });
 
 const app = express();
-
+const MONGOURI=process.env.MONGO_URI;
 // MongoDB connection configuration
-mongoose.connect('mongodb+srv://ankitpathak11525:QSYVHDTaw1Z2CWzc@cluster0.fb8heue.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0').then(() => {
+mongoose.connect(MONGOURI).then(() => {
     console.log('Connected to MongoDB database');
 }).catch(err => {
     console.error('Error connecting to MongoDB:', err.message);
@@ -18,7 +20,7 @@ const leaderboardSchema = new mongoose.Schema({
     country: String
 });
 
-const Leaderboard = mongoose.model('Leaderboard', leaderboardSchema);
+const leaderboard = mongoose.model('leaderboard', leaderboardSchema);
 
 // Test MongoDB connection
 app.get('/', (req, res) => {
@@ -32,7 +34,7 @@ app.get('/specific-timestamp/:timestamp', async (req, res) => {
     
     try {
         console.log(specificTimestamp);
-        const data = await Leaderboard.find({
+        const data = await leaderboard.find({
             timestamp: specificTimestamp
         });
         res.json(data);
@@ -53,7 +55,7 @@ app.get('/current-week-leaderboard', async (req, res) => {
     
     try {
 
-        const data = await Leaderboard.find({
+        const data = await leaderboard.find({
             timestamp: {$gte: startOfWeek, $lt: endOfWeek }
         }).sort({ score: -1 }).limit(200);
         res.json(data);
@@ -74,7 +76,7 @@ app.get('/last-week-leaderboard/:country', async (req, res) => {
     endOfLastWeek.setDate(startOfLastWeek.getDate() + 7);
     
     try {
-        const data = await Leaderboard.find({
+        const data = await leaderboard.find({
             country: country_code,
             timestamp: { $gte: startOfLastWeek, $lt: endOfLastWeek }
         }).sort({ score: -1 }).limit(200);
@@ -89,17 +91,31 @@ app.get('/user-rank/:userId', async (req, res) => {
     const userId = req.params.userId;
     
     try {
-        const userRank = await Leaderboard.find({
-            userId: userId
-        }).sort({ score: -1, timestamp: 1 });
-        res.json(userRank);
+        // First, find the user's score
+        const userScore = await leaderboard.findOne({ userId });
+
+        if (!userScore) {
+            // If user is not found, return an error
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Count the number of users with a higher score than the current user
+        const rank = await leaderboard.countDocuments({ score: { $gt: userScore.score } });
+
+        // Rank starts from 1, so add 1 to the rank
+        const userRank = rank + 1;
+
+        // Now, return the user's rank
+        res.json({ userId, rank: userRank });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 
-const PORT = process.env.PORT || 4000;
+
+const PORT = process.env.PORT ;
+console.log(PORT);
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
