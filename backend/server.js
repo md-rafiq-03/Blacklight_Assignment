@@ -1,81 +1,105 @@
 const express = require('express');
-const mysql = require('mysql');
+const mongoose = require('mongoose');
 
 const app = express();
 
-// MySQL database connection configuration
-const pool = mysql.createPool({
-    connectionLimit: 10,
-    host: 'localhost',
-    user: 'root',
-    password: 'password',
-    database: 'Blacklight'
+// MongoDB connection configuration
+mongoose.connect('mongodb+srv://ankitpathak11525:QSYVHDTaw1Z2CWzc@cluster0.fb8heue.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0').then(() => {
+    console.log('Connected to MongoDB database');
+}).catch(err => {
+    console.error('Error connecting to MongoDB:', err.message);
 });
 
-// Test MySQL connection
-pool.getConnection((err, connection) => {
-    if (err) {
-        throw err;
+// Define MongoDB schema
+const leaderboardSchema = new mongoose.Schema({
+    userId: String,
+    score: Number,
+    timestamp: Date,
+    country: String
+});
+
+const Leaderboard = mongoose.model('Leaderboard', leaderboardSchema);
+
+// Test MongoDB connection
+app.get('/', (req, res) => {
+    res.send('Hello World!');
+});
+app.get('/specific-timestamp/:timestamp', async (req, res) => {
+    const timestampString = req.params.timestamp;
+
+    // Convert the timestamp string to a Date object
+    const specificTimestamp = new Date(timestampString);
+    
+    try {
+        console.log(specificTimestamp);
+        const data = await Leaderboard.find({
+            timestamp: specificTimestamp
+        });
+        res.json(data);
+        console.log(data);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Internal Server Error' });
     }
-    console.log('Connected to MySQL database');
-
-    pool.query(`select * from Blacklight.leaderboard`,(err,res)=>{
-        // console.log(res);
-    })
-
-    // Define routes inside the callback function to ensure they have access to the connection
-    app.get('/', (req, res) => {
-        res.send('Hello World!');
-    });
-
-    app.get('/current-week-leaderboard', (req, res) => {
-        pool.query(`
-        SELECT *
-        FROM leaderboard
-        WHERE timestamp >= CURDATE() - INTERVAL WEEKDAY(CURDATE()) DAY
-              AND timestamp < CURDATE() - INTERVAL WEEKDAY(CURDATE()) DAY + INTERVAL 7 DAY
-        ORDER BY score DESC
-        LIMIT 200`,(err,data)=>{
-                    console.log(data);
-                    res.json(data);
-        })
-    });
-    
-    app.get('/last-week-leaderboard/:country', (req, res) => {
-        const country_code = req.params.country;
-        console.log(country_code);
-        pool.query(`
-        SELECT *
-        FROM leaderboard
-        WHERE Country='${country_code}' AND timestamp >= CURDATE() - INTERVAL WEEKDAY(CURDATE()) DAY - INTERVAL 1 WEEK
-              AND timestamp < CURDATE() - INTERVAL WEEKDAY(CURDATE()) DAY
-        ORDER BY score DESC
-        LIMIT 200`,(err,data)=>{
-                    console.log(data);
-                    res.json(data);
-        })
-        
-    });
-    
- app.get('/user-rank/:userId', (req, res) => {
-        const userId = req.params.userId;
-        pool.query(`
-        select * from (
-            SELECT *,
-                   ROW_NUMBER() OVER (ORDER BY score DESC, timestamp) AS User_rank
-            FROM leaderboard) as new_table
-            where new_table.uid='${userId}'`,(err,data)=>{
-                    console.log(data);
-                    res.json(data);
-        })
-    });
-    
-
-    const PORT = process.env.PORT || 3000;
-    app.listen(PORT, () => {
-        console.log(`Server is running on port ${PORT}`);
-    });
-
-    connection.release();
 });
- 
+
+app.get('/current-week-leaderboard', async (req, res) => {
+    const currentDate = new Date();
+    const startOfWeek = new Date(currentDate);
+    startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 7);
+    
+    try {
+
+        const data = await Leaderboard.find({
+            timestamp: {$gte: startOfWeek, $lt: endOfWeek }
+        }).sort({ score: -1 }).limit(200);
+        res.json(data);
+        console.log(data);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/last-week-leaderboard/:country', async (req, res) => {
+    const country_code = req.params.country;
+    const currentDate = new Date();
+    const startOfLastWeek = new Date(currentDate);
+    startOfLastWeek.setDate(currentDate.getDate() - currentDate.getDay() - 7);
+    startOfLastWeek.setHours(0, 0, 0, 0);
+    const endOfLastWeek = new Date(startOfLastWeek);
+    endOfLastWeek.setDate(startOfLastWeek.getDate() + 7);
+    
+    try {
+        const data = await Leaderboard.find({
+            country: country_code,
+            timestamp: { $gte: startOfLastWeek, $lt: endOfLastWeek }
+        }).sort({ score: -1 }).limit(200);
+        res.json(data);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/user-rank/:userId', async (req, res) => {
+    const userId = req.params.userId;
+    
+    try {
+        const userRank = await Leaderboard.find({
+            userId: userId
+        }).sort({ score: -1, timestamp: 1 });
+        res.json(userRank);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
