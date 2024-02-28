@@ -1,4 +1,4 @@
-import mysql.connector
+from pymongo import MongoClient
 from faker import Faker
 from datetime import datetime
 import random
@@ -16,33 +16,32 @@ def generate_userid(name):
     return user_id
 
 
-# Connect to MySQL database
-conn = mysql.connector.connect(
-    host="localhost",
-    user="root",
-    password="password",
-    database="Blacklight"
-)
-cursor = conn.cursor()
+# Connect to MongoDB database
+client = MongoClient('mongodb+srv://mdrafeequg20:S9pXOVwgd7ao74Bk@cluster0.grodjyb.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')
+db = client['Blacklight']
+leaderboard_collection = db['leaderboard']
 
 # Create Faker instance for generating fake data
 fake = Faker()
 
 # Generate and insert 10,000 rows of data
-
 for _ in range(10000):
     name = fake.name()
-    # uid = fake.uuid4()
-    uid=generate_userid(name)
-    # print(uid)
+    uid = generate_userid(name)
     score = random.randint(0, 1000)
     country = fake.country_code(representation="alpha-2")
     timestamp = fake.date_time_between(start_date="-1y", end_date="now")
-    sql = "INSERT INTO leaderboard (UID, Name, Score, Country, TimeStamp) VALUES (%s, %s, %s, %s, %s)"
-    val = (uid, name, score, country, timestamp)
-    # print(val)
-    cursor.execute(sql, val)
+    
+    leaderboard_data = {
+        'UID': uid,
+        'Name': name,
+        'Score': score,
+        'Country': country,
+        'Timestamp': timestamp
+    }
+    
+    leaderboard_collection.insert_one(leaderboard_data)
 
-# Commit changes and close connection
-conn.commit()
-conn.close()
+print("Data insertion complete.")
+
+client.close()
